@@ -2,7 +2,6 @@
 #define ASCII_GENERATOR_HPP
 
 #include <string>
-#include<iostream>
 using String = std::string;
 
 class Ascii{
