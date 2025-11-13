@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -47,37 +48,86 @@ void getResampling(std::vector<std::vector<double>>& l_src, std::vector<std::vec
         int ey{};
         int temp1{};
         int temp2{};
-        double sum{0.0};
-        int count{0};
         for (int tr = 0 ; tr < rows ; tr++){
             for (int tc = 0; tc < cols ; tc++){
-                sx = std::floor((tc * block_w));
-                sy = std::floor((tr * block_h));
-                temp1 = std::floor(((tc + 1) * block_w));
-                temp2 = std::floor(((tr + 1) * block_h));
-                ex = std::min(width , temp1);
-                ey = std::min(height , temp2);
+                double sx_f = tc * block_w;
+                double sy_f = tr * block_h;
+                double ex_f = (tc + 1) * block_w;
+                double ey_f = (tr + 1) * block_h;
+                sx = std::floor(sx_f);
+                sy = std::floor(sy_f);
+                ex = std::min(width , (int)std::floor(ex_f));
+                ey = std::min(height , (int) std::floor(ey_f));
 
                 if ( ex <= sx || ey <= sy ){
                     //Empty block
-                    int cx = std::clamp(int((tc*block_w*(1 + block_w))*0.5) , 0 , width - 1);
-                    int cy = std::clamp(int((tr*block_w*(1 + block_h))*0.5) , 0 , height - 1);
+                    int cx = std::clamp(int(std::round((sx_f + ex_f) * 0.5)) , 0 , width - 1);
+                    int cy = std::clamp(int(std::round((sy_f + ey_f) * 0.5)) , 0 , height - 1);
                     l_cell[tr][tc] = l_src[cy][cx];
                     continue;
                 }
 
+                double sum{0.0};
+                int count{0};
                 for(int y = sy ; y < ey; y++){
                     for (int x = sx ; x < ex; x++){
                         sum += l_src[y][x];
                         count++;
                     }
                 }
-                l_cell[tr][tc] = sum / count;
+                l_cell[tr][tc] = sum / (double) count;
 
             }
-            sum = 0;
-            count = 0;
         }
+}
+
+std::array<int, 4> computeBoxForCrop(const std::vector<std::vector<double>>& luminance , int width , int height , double mean_Y){
+    double threshold = mean_Y - (0.15 * mean_Y);
+    int pad = std::clamp(width / 200 , 4 , 64);
+    int minX = width; int minY = height; int maxX = -1; int maxY = -1;
+
+    for (int y = 0; y < height ; y++){
+        for (int x = 0; x < width; x++){
+            bool keep = false;
+
+            if (!keep) {
+                if (luminance[y][x] > threshold){
+                    keep = true;
+                }
+            }
+
+            if (keep) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+
+    if (maxX < minX) {
+        return {0 , 0 , width - 1 , height - 1};
+    }
+
+    minX = std::max(0 , minX - pad);
+    minY = std::max(0 , minY - pad);
+    maxX = std::min(width - 1 , maxX + pad);
+    maxY = std::min(height - 1 , maxY + pad);
+
+    return {minX , minY , maxX , maxY};
+}
+
+std::vector<std::vector<double>> MainCrop(const std::vector<std::vector<double>>& luminance , const std::array<int, 4>& box){
+    int minX = box[0]; int minY = box[1]; int maxX = box[2]; int maxY = box[3];
+    int width = maxX - minX + 1;
+    int height = maxY - minY + 1;
+    std::vector<std::vector<double>> out(height , std::vector<double>(width , 0.0));
+    for ( int y = 0 ; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            out[y][x] = luminance[minY + y][minX + x];
+        }
+    }
+    return out;
 }
 
 void Ascii::generate(){
@@ -85,7 +135,7 @@ void Ascii::generate(){
     int n{};
     int width{};
     int height{};
-    int desired_channels = 3;
+    int desired_channels = 4;
     //Here x and y are the values for the array position and n is channels for the photo!
     unsigned char* pixel_data = stbi_load( image_path.c_str(),&width,&height,&n, desired_channels);
 
@@ -95,15 +145,6 @@ void Ascii::generate(){
 
     std::cout << "Width: " << width << " Height: " << height << " Channels: " << n << std::endl;
     std::vector<double> temp_array;
-    //During The Main Program
-    /*for (y ; y < height ; y++){
-        for (x ; x < width ; x++){
-            index = ( y * width + x) * desired_channels;
-            int red = pixel_data[index];
-            int green = pixel_data[index+1];
-            int blue = pixel_data[index+2];
-        }
-    }*/
     int index{};
     double rf{};
     double gf{};
@@ -114,9 +155,14 @@ void Ascii::generate(){
         for (int x = 0; x < width ; x++){
             //Calculate Index and RGB values For One Pixel!!
             index = (y * width + x) * desired_channels;
-            rf = pixel_data[index] / 255.0;
-            gf = pixel_data[index+1] / 255.0;
-            bf = pixel_data[index+2] / 255.0;
+            double r_byte = pixel_data[index];
+            double g_byte = pixel_data[index + 1];
+            double b_byte = pixel_data[index + 2];
+            double a_byte = pixel_data[index + 3];
+            double alpha = a_byte / 255.0;
+            rf = alpha * (r_byte/255.0) + (1.0 - alpha) * 1.0;
+            gf = alpha * (g_byte/255.0) + (1.0 - alpha) * 1.0;
+            bf = alpha * (b_byte/255.0) + (1.0 - alpha) * 1.0;
             //Have linearize for each value!!!! //Not Important but gets more sharp output :) (when sRGB)
             getLinearized(temp_array,rf,gf,bf);
             //Calculate Linear Luminance For That Pixel!!!
@@ -124,35 +170,61 @@ void Ascii::generate(){
             luminance[y][x] = linear_luminance;
         }
     }
+    stbi_image_free(pixel_data);
+    
     std::cout << "First Pixel luminance value: " << luminance[0][0] << std::endl;
     std::cout << "Last Pixel luminance value: " << luminance[height-1][width-1] << std::endl;
-    float char_aspect = 0.55;
-    int cols = 100;
+    
+    float char_aspect = 0.65;
+    int cols{};
+    if (width > 200){
+        cols = 150;
+    } else {
+        cols = width;
+    }
     int rows = round(cols * (height / (double) width) * char_aspect);
     std::cout << "Rows: " << rows << " Columns: " << cols << std::endl;
-    /*for (int i = 0; i < rows ; i++) {
-        for (int j = 0; j < cols ; j++){
-            std::cout << '#';
-        }
-        std::cout << '\n';
-    }*/
+
+    std::vector<std::vector<double>> l_cell(rows , std::vector<double>(cols));
+
+    double minV=1 , maxV = 0, sum=0; int count = 0;
+    
+    //Debugging Purpose!!
+    for(int i = 0 ; i < height ; i++) for (int j = 0 ; j < width ; j++){
+        double v = luminance[i][j];
+        minV = std::min(minV , v);
+        maxV = std::max(maxV , v);
+        sum += v; count++;
+    }
+
+    std::cout << "Value of mean: " << (sum/count) << " Max: " << maxV << " Min: " << minV << std::endl;
+    double meanY = sum / count;
+    
+    auto box = computeBoxForCrop(luminance, width, height, meanY);
+    int cropped_width = box[2] - box[0] + 1;
+    int cropped_height = box[3] - box[1] + 1;
+    std::cout << "Debugs : " << box[0] << " " << box[1] << " " << box[2] << " " << box[3] << " " << std::endl;
+    
+    auto luminance_cropped = MainCrop(luminance, box);
 
     //Resampling the pixels to a block ( convert to a function !)
-    std::vector<std::vector<double>> l_cell(rows , std::vector<double>(cols));
-    getResampling(luminance, l_cell, width, height, cols, rows);
+    getResampling(luminance_cropped, l_cell, cropped_width, cropped_height, cols, rows);
 
     std::cout << "First value of luminance for the block after resampling >> " << l_cell[0][0] << std::endl;
 
-    //Add Brightness , Contrast , Gamma etc ..
-    double brightness = 0.19;
-    double contrast   = 1.12;
-    double gamma      = 1.0;
+    /////////////////////////////////////////////////////////////////////////////// Here Brightness starts!!
 
     std::vector<std::vector<double>> added_values(rows , std::vector<double>(cols));
+    
+    //Add Brightness , Contrast , Gamma etc ..
+    double brightness = 0.10;
+    double contrast   = 1.5;
+    double gamma      = 1.0;
+    
     for ( int i = 0 ; i < rows ; i++){
         for (int j = 0; j < cols ; j++){
             double value = l_cell[i][j];
-            double v_contrast = (value - 0.5) * contrast + 0.5;
+            double v_contrast = (value - meanY) * contrast + meanY;
             double v_brightness = v_contrast + brightness;
             double v_clamp = std::clamp(v_brightness , 0.0 , 1.0);
             if (i == 4 && j == 4) {
@@ -168,4 +240,17 @@ void Ascii::generate(){
     }
     std::cout << "Check : " << added_values[4][4] << std::endl;
 
+    std::string ramp = "@%#*+=-:. ";
+    int N_ramp = ramp.length();
+
+    double val{};
+    for ( int i = 0; i < rows ; i++){
+        for (int j = 0; j < cols ; j++){
+            val = added_values[i][j];
+            int index = int(std::round(val * (N_ramp - 1)));
+            index = std::clamp(index , 0 , N_ramp - 1);
+            std::cout << ramp[index];
+        }
+        std::cout << "\n";
+    }
 }   
