@@ -9,7 +9,7 @@ cmake -S . -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
 
 cmake --build "${BUILD_DIR}" --config "${CMAKE_BUILD_TYPE}"
 
-cmake --install "${BUILD_DIR}" --prefix "${PREFIX}"
+cmake --install "${BUILD_DIR}" --prefix "${DEFAULT_PREFIX}"
 
 echo
 echo "Install finished. Make sure '${PREFIX}/bin' is on your PATH."
