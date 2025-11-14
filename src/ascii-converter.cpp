@@ -3,7 +3,6 @@
 #include <cmath>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-#include <iostream>
 #include <ostream>
 #include <vector>
 #include "ascii-converter.hpp"
@@ -46,8 +45,6 @@ void getResampling(std::vector<std::vector<double>>& l_src, std::vector<std::vec
         int sy{};
         int ex{};
         int ey{};
-        int temp1{};
-        int temp2{};
         for (int tr = 0 ; tr < rows ; tr++){
             for (int tc = 0; tc < cols ; tc++){
                 double sx_f = tc * block_w;
@@ -165,6 +162,7 @@ void Ascii::generate(){
             bf = alpha * (b_byte/255.0) + (1.0 - alpha) * 1.0;
             //Have linearize for each value!!!! //Not Important but gets more sharp output :) (when sRGB)
             getLinearized(temp_array,rf,gf,bf);
+            
             //Calculate Linear Luminance For That Pixel!!!
             linear_luminance = 0.2126 * temp_array[0] + 0.7152 * temp_array[1] + 0.0722 * temp_array[2];
             luminance[y][x] = linear_luminance;
@@ -172,17 +170,19 @@ void Ascii::generate(){
     }
     stbi_image_free(pixel_data);
     
-    std::cout << "First Pixel luminance value: " << luminance[0][0] << std::endl;
+    /*std::cout << "First Pixel luminance value: " << luminance[0][0] << std::endl;
     std::cout << "Last Pixel luminance value: " << luminance[height-1][width-1] << std::endl;
-    
-    float char_aspect = 0.65;
-    int cols{};
-    if (width > 200){
-        cols = 150;
+    */
+
+    float char_aspect = getCharAspect();
+    int cols = getWidth();
+    int rows{};
+    if (getHeight() == 0){
+        rows = round(cols * (height / (double) width) * char_aspect);    
     } else {
-        cols = width;
+        rows = getHeight();
     }
-    int rows = round(cols * (height / (double) width) * char_aspect);
+    
     std::cout << "Rows: " << rows << " Columns: " << cols << std::endl;
 
     std::vector<std::vector<double>> l_cell(rows , std::vector<double>(cols));
@@ -196,30 +196,33 @@ void Ascii::generate(){
         maxV = std::max(maxV , v);
         sum += v; count++;
     }
-
-    std::cout << "Value of mean: " << (sum/count) << " Max: " << maxV << " Min: " << minV << std::endl;
+    /*
+    std::cout << "Value of mean: " << (sum/count) << " Max: " << maxV << " Min: " << minV << std::endl;*/
     double meanY = sum / count;
-    
+
     auto box = computeBoxForCrop(luminance, width, height, meanY);
     int cropped_width = box[2] - box[0] + 1;
     int cropped_height = box[3] - box[1] + 1;
-    std::cout << "Debugs : " << box[0] << " " << box[1] << " " << box[2] << " " << box[3] << " " << std::endl;
+
+    /*std::cout << "Debugs : " << box[0] << " " << box[1] << " " << box[2] << " " << box[3] << " " << std::endl;*/
     
     auto luminance_cropped = MainCrop(luminance, box);
 
     //Resampling the pixels to a block ( convert to a function !)
     getResampling(luminance_cropped, l_cell, cropped_width, cropped_height, cols, rows);
 
-    std::cout << "First value of luminance for the block after resampling >> " << l_cell[0][0] << std::endl;
+    /*std::cout << "First value of luminance for the block after resampling >> " << l_cell[0][0] << std::endl;*/
+
+
 
     /////////////////////////////////////////////////////////////////////////////// Here Brightness starts!!
 
     std::vector<std::vector<double>> added_values(rows , std::vector<double>(cols));
     
     //Add Brightness , Contrast , Gamma etc ..
-    double brightness = 0.10;
-    double contrast   = 1.5;
-    double gamma      = 1.0;
+    double brightness = getBrightness();
+    double contrast   = getContrast();
+    double gamma      = getGamma();
     
     for ( int i = 0 ; i < rows ; i++){
         for (int j = 0; j < cols ; j++){
@@ -227,20 +230,21 @@ void Ascii::generate(){
             double v_contrast = (value - meanY) * contrast + meanY;
             double v_brightness = v_contrast + brightness;
             double v_clamp = std::clamp(v_brightness , 0.0 , 1.0);
-            if (i == 4 && j == 4) {
+            /*if (i == 4 && j == 4) {
                 std::cout << "value=" << value 
                 << " v_contrast=" << v_contrast
                 << " v_brightness=" << v_brightness
                 << " v_clamp=" << v_clamp
                 << " gamma=" << gamma << '\n';
-            }
+            }*/
             double v_value = std::pow(v_clamp , 1.0/gamma);
             added_values[i][j] = v_value;
         }
     }
-    std::cout << "Check : " << added_values[4][4] << std::endl;
 
-    std::string ramp = "@%#*+=-:. ";
+    /*std::cout << "Check : " << added_values[4][4] << std::endl;*/
+    
+    std::string ramp = getCharLevel();
     int N_ramp = ramp.length();
 
     double val{};

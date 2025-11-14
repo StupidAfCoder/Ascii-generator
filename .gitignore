@@ -1,2 +1,14 @@
+# CMake / build
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+/Makefile
+/*.cmake
+/*.dir
+compile_commands.json
+
+# common OS / editor junk
+.DS_Store
+*.swp
 .vscode/
 /src/build/
