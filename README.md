@@ -1,5 +1,5 @@
 # ASCII Generator
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/StupidAfCoder/Ascii-generator.git)
+![Demo](images/first.png)
 
 A powerful, cross-platform command-line tool written in C++ to convert static images into high-quality ASCII art. It offers a range of options for fine-tuning the output, from brightness and contrast adjustments to custom character sets.
 
