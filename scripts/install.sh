@@ -12,4 +12,4 @@ cmake --build "${BUILD_DIR}" --config "${CMAKE_BUILD_TYPE}"
 cmake --install "${BUILD_DIR}" --prefix "${DEFAULT_PREFIX}"
 
 echo
-echo "Install finished. Make sure '${PREFIX}/bin' is on your PATH."
+echo "Install finished. Make sure '${DEFAULT_PREFIX}/bin' is on your PATH."
